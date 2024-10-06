@@ -1,59 +1,62 @@
-import os
-import urllib.request as request
-from zipfile import ZipFile
-import tensorflow as tf
-from pathlib import Path
-from cnnClassifier.entity.config_entity import PrepareBaseModelConfig
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torchvision import models
+#from cnnClassifier.entity.config_entity import PrepareBaseModelConfig
 
 
 class PrepareBaseModel:
-    def __init__(self, config: PrepareBaseModelConfig):
+    #def __init__(self, config: PrepareBaseModelConfig):
+    def __init__(self, config):
         self.config = config
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    
+
+    # Load the pre-trained VGG16 model
     def get_base_model(self):
-        self.model = tf.keras.applications.vgg16.VGG16(
-            input_shape=self.config.params_image_size,
-            weights=self.config.params_weights,
-            include_top=self.config.params_include_top
+        self.model = models.vgg16(
+            pretrained=self.config.params_weights,
+            progress=True
         )
 
+        # Move the model to the GPU if available
+        self.model = self.model.to(self.device)
         self.save_model(path=self.config.base_model_path, model=self.model)
 
     
-
+    # Prepare the full model by adding custom layers and freezing layers if necessary
     @staticmethod
     def _prepare_full_model(model, classes, freeze_all, freeze_till, learning_rate):
+        # Freeze all layers if required
         if freeze_all:
-            for layer in model.layers:
-                model.trainable = False
+            for param in model.parameters():
+                param.requires_grad = False
+        # Freeze till specific layers
         elif (freeze_till is not None) and (freeze_till > 0):
-            for layer in model.layers[:-freeze_till]:
-                model.trainable = False
+            for param in list(model.parameters())[:-freeze_till]:
+                param.requires_grad = False
 
-        flatten_in = tf.keras.layers.Flatten()(model.output)
-        prediction = tf.keras.layers.Dense(
-            units=classes,
-            activation="softmax"
-        )(flatten_in)
-
-        full_model = tf.keras.models.Model(
-            inputs=model.input,
-            outputs=prediction
+        # Add custom layers on top of VGG16
+        num_features = model.classifier[6].in_features
+        model.classifier[6] = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(num_features, classes),
+            nn.Softmax(dim=1)
         )
 
-        full_model.compile(
-            optimizer=tf.keras.optimizers.SGD(learning_rate=learning_rate),
-            loss=tf.keras.losses.CategoricalCrossentropy(),
-            metrics=["accuracy"]
-        )
+        # Move the model to the GPU
+        #model = model.to(self.device)
 
-        full_model.summary()
-        return full_model
-    
-    
+        # Set up the optimizer and loss function (similar to compiling in Keras)
+        optimizer = optim.SGD(model.parameters(), lr=learning_rate)
+        criterion = nn.CrossEntropyLoss()
+
+        return model, optimizer, criterion
+
+
+    # Update the base model by applying modifications (freezing and adding new layers)
     def update_base_model(self):
-        self.full_model = self._prepare_full_model(
+        self.full_model, self.optimizer, self.criterion = self._prepare_full_model(
             model=self.model,
             classes=self.config.params_classes,
             freeze_all=True,
@@ -63,8 +66,8 @@ class PrepareBaseModel:
 
         self.save_model(path=self.config.updated_base_model_path, model=self.full_model)
 
-    
-        
+
+    # Save the model to a given path
     @staticmethod
-    def save_model(path: Path, model: tf.keras.Model):
-        model.save(path)
+    def save_model(path, model):
+        torch.save(model.state_dict(), path)
