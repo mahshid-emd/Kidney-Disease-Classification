@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torchvision import models
+from cnnClassifier.utils.common import save_model
 #from cnnClassifier.entity.config_entity import PrepareBaseModelConfig
 
 
@@ -21,7 +22,7 @@ class PrepareBaseModel:
 
         # Move the model to the GPU if available
         self.model = self.model.to(self.device)
-        self.save_model(path=self.config.base_model_path, model=self.model)
+        save_model(path=self.config.base_model_path, model=self.model)
 
     
     # Prepare the full model by adding custom layers and freezing layers if necessary
@@ -64,10 +65,9 @@ class PrepareBaseModel:
             learning_rate=self.config.params_learning_rate
         )
 
-        self.save_model(path=self.config.updated_base_model_path, model=self.full_model)
+        save_model(path=self.config.updated_base_model_path, model=self.full_model)
+
+        return self.full_model
 
 
-    # Save the model to a given path
-    @staticmethod
-    def save_model(path, model):
-        torch.save(model.state_dict(), path)
+
