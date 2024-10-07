@@ -1,5 +1,6 @@
 import os
 from box.exceptions import BoxValueError
+import torch
 import yaml
 from cnnClassifier import logger
 import json
@@ -132,3 +133,8 @@ def decodeImage(imgstring, fileName):
 def encodeImageIntoBase64(croppedImagePath):
     with open(croppedImagePath, "rb") as f:
         return base64.b64encode(f.read())
+    
+
+# Save the model to a given path
+def save_model(path, model):
+    torch.save(model.state_dict(), path)
