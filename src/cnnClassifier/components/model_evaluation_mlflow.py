@@ -102,5 +102,3 @@ class Evaluation:
             else:
                 # Log model without registry
                 mlflow.pytorch.log_model(self.model, "model")
-
-
